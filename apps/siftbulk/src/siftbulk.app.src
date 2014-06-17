@@ -1,0 +1,10 @@
+{application, siftbulk,
+ [{vsn, "0.0.1"},
+  {description, "A simple Erlang FTP server for connecting to our APIs"},
+  {modules, [siftbulk_app, siftbulk_sup, siftbulk]},
+  {applications, [stdlib, kernel]},
+  {registered, [siftbulk_app]},
+  {mod, {siftbulk_app, []}},
+  {env,
+   []}
+ ]}.
