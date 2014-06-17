@@ -30,9 +30,7 @@ set_opts_and_get_opts_test_() ->
 
 init_test_() ->
     {"Verifies that init sets default and values when appropriate",
-     ?setup([fun test_init_default_empty/0,
-       fun test_init_default_set/0,
-       fun test_init_nodefault_set/0])}.
+     ?setup([fun test_init_default_empty/0])}.
 
 handle_call_test_() ->
     {"Verifies that it sends calls to all of the relevant functions",
@@ -102,26 +100,6 @@ test_get_opts_set_multiple() ->
 test_init_default_empty() ->
     ?assertEqual({ok, #state{}}, 
                  siftbulk:init([])).
-
-test_init_default_set() ->
-    Setting = [{password, <<"e261742d-fe2f-4569-95e6-312689d04903">>},
-               {username, <<"TestKey">>}],
-
-    ShouldBe = lists:reverse(Setting) ++ ?DEFAULT_CONNECTION_INFO,
-
-    ?assertEqual({ok, #state{opts = ShouldBe}}, 
-                 siftbulk:init(Setting)).
-
-test_init_nodefault_set() ->
-    Setting = [{username, <<"TestKey">>},
-               {password, <<"e261742d-fe2f-4569-95e6-312689d04903">>},
-               {host, <<"bacon">>},
-               {port, 9871},
-               {poll_every, 100}],
-
-    % Need to reverse because record order matters in the assert
-    ?assertEqual({ok, #state{opts = Setting}}, 
-                 siftbulk:init(Setting)).
 
 test_call_set_opts() ->
     Opts = [{username, <<"TestKey">>}],

@@ -45,13 +45,18 @@ and to test:
   </code>
 </pre>
 
+Configuration
+=============
+
+Default application configuration parameters can be modified in sys.config under siftbulk.
+
 Files And Folders
 =================
 
 This project uses the [standard application layout structure](http://www.erlang.org/doc/design_principles/applications.html). Non standard files + directories.
 
 * **apps:** Standard structure of the applications for this project (just siftbulk).
- * **apps\/siftbulk\/priv\/test.csv:** A small sample records file.
+ * **apps/siftbulk/priv/test.csv:** A small sample records file.
 * **deps:** Any dependencies.
 * **rel:** Rebar release will be generated here, see rebar.config.
 * **rebar:** Rebar binary.

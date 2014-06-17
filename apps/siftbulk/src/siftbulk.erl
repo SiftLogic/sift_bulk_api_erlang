@@ -9,7 +9,7 @@
 
 %% Private
 
-set_opts(#state{} = State, undefined) ->
+set_opts(#state{} = State, []) ->
     State;
 set_opts(#state{} = State, Opts) ->
     Fields = [host, password, poll_every, port, username],
@@ -46,10 +46,14 @@ start_link() ->
 %% port: The port to connect to. Defaults to 21.
 %% poll_every: Number of seconds to poll. Defaults to 300 (5 minutes)if falsey.
 
-init(Opts) ->
-    State = set_opts(#state{},
-                     Opts),
-    % application:get_env(siftbulk) % Get application configuration variables
+init([]) ->
+    Opts = case application:get_env(siftbulk, auth) of % Get application configuration variables
+               {ok, Opts0} ->
+                 Opts0;
+               _ ->
+                 []
+           end,
+    State = set_opts(#state{}, Opts),
     {ok, State}.
 
 %% Handles all synchronous calls to the server. See specific functions for more
