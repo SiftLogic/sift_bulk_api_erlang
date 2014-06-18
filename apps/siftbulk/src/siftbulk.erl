@@ -9,18 +9,17 @@
 
 -type connection_part() :: {atom(), any()}.
 -type connection_list() :: list(connection_part()).
--type state() :: #state{}.
 
 %% Private
 
--spec set_opts(state(), connection_list()) -> state().
+-spec set_opts(#state{}, connection_list()) -> #state{}.
 set_opts(#state{} = State, []) ->
     State;
 set_opts(#state{} = State, Opts) ->
     Fields = [host, password, poll_every, port, username],
     set_opts(State, Fields, Opts).
 
--spec set_opts(state(), list(), connection_list()) -> state().
+-spec set_opts(#state{}, list(), connection_list()) -> #state{}.
 set_opts(#state{} = State, [], _Opts) ->
     State;
 set_opts(#state{opts = OldOpts} = State, [Field | Tail], Opts) ->
@@ -53,7 +52,7 @@ start_link() ->
 %% port: The port to connect to. Defaults to 21.
 %% poll_every: Number of seconds to poll. Defaults to 300 (5 minutes)if falsey.
 
--spec init([]) -> {ok, state()}.
+-spec init([]) -> {ok, #state{}}.
 init([]) ->
     Opts = case application:get_env(siftbulk, auth) of % Get application configuration variables
                {ok, Opts0} ->
@@ -68,9 +67,9 @@ init([]) ->
 %% detailed information.
 
 -spec handle_call({set_opts, connection_list()}, any(), any()) ->
-                     {reply, ok, state()};
-                 (get_opts, any(), state()) -> 
-                     {reply, connection_list(), state()};
+                     {reply, ok, #state{}};
+                 (get_opts, any(), #state{}) -> 
+                     {reply, connection_list(), #state{}};
                  (stop, any(), any()) -> 
                      {stop, normal, ok, any()}.
 handle_call({set_opts, Opts}, _From, State) ->
