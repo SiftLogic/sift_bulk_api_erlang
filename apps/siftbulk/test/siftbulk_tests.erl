@@ -1,21 +1,9 @@
-% erl -make
-% erl -noshell -pa ebin -eval "eunit:test(siftbulk_tests, [verbose])" -s init stop
 -module(siftbulk_tests).
 -include_lib("eunit/include/eunit.hrl").
 -include("../include/siftbulk.hrl").
-
--define(DEFAULT_CONNECTION_INFO, [{host, <<"localhost">>},
-                                  {port, 21},
-                                  {poll_every, 300}]).
+-include("tests.hrl").
 
 -define(DEFAULT_OPTS_INFO, #state{}#state.opts).
--define(setup(ToTest), {setup, fun start/0, fun stop/1, [ToTest]}).
-
-quiet_stop(App) ->
-    error_logger:tty(false),
-    Res = application:stop(App),
-    error_logger:tty(true),
-    Res.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% TESTS DESCRIPTIONS %%%
@@ -76,25 +64,25 @@ test_get_opts_empty() ->
 
 test_get_opts_set_one() ->
     ShouldBe = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
-                                {username, <<"TestUser">>}),
-    siftbulk:set_opts({username, <<"TestUser">>}),
+                                {username, "TestUser"}),
+    siftbulk:set_opts({username, "TestUser"}),
     ?assertEqual(ShouldBe, siftbulk:get_opts()).
 
 test_get_opts_set_one_list() ->
     ShouldBe = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
-                                {username, <<"TestUser">>}),
-    siftbulk:set_opts([{username, <<"TestUser">>}]),
+                                {username, "TestUser"}),
+    siftbulk:set_opts([{username, "TestUser"}]),
     ?assertEqual(ShouldBe, siftbulk:get_opts()).
 
 test_get_opts_set_multiple() ->
     Temp = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
-                            {username, <<"TestUser">>}),
-    Temp1 = lists:keyreplace(password, 1, Temp, {password, <<"test">>}),
-    ShouldBe = lists:keyreplace(host, 1, Temp1, {host, <<"bacon">>}),
+                            {username, "TestUser"}),
+    Temp1 = lists:keyreplace(password, 1, Temp, {password, "test"}),
+    ShouldBe = lists:keyreplace(host, 1, Temp1, {host, "bacon"}),
 
-    siftbulk:set_opts([{username, <<"TestUser">>},
-                       {password, <<"test">>},
-                       {host, <<"bacon">>}]),
+    siftbulk:set_opts([{username, "TestUser"},
+                       {password, "test"},
+                       {host, "bacon"}]),
     ?assertEqual(ShouldBe, siftbulk:get_opts()).
 
 test_init_default_empty() ->
@@ -102,9 +90,9 @@ test_init_default_empty() ->
                  siftbulk:init([])).
 
 test_call_set_opts() ->
-    Opts = [{username, <<"TestKey">>}],
+    Opts = [{username, "TestKey"}],
     NewOpts = lists:keyreplace(username, 1, 
-                               ?DEFAULT_OPTS_INFO, {username, <<"TestKey">>}),
+                               ?DEFAULT_OPTS_INFO, {username, "TestKey"}),
 
     NewState = #state{opts = NewOpts},
     ?assertEqual({reply, ok, NewState}, 

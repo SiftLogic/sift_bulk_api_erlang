@@ -25,7 +25,7 @@ Installation
 Make sure Erlang \>= <b>R15B3</b> is installed, then compile and generate: 
 <pre>
   <code>
-    ./rebar compile generate
+    ./rebar get-deps compile generate
   </code>
 </pre>
 
@@ -41,7 +41,7 @@ and to test:
 
 <pre>
   <code>
-    ./rebar compile eunit
+    ./rebar compile eunit skip_deps=true
   </code>
 </pre>
 
