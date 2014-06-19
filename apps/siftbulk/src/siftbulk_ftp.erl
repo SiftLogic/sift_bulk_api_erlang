@@ -3,6 +3,7 @@
 
 -define(TIMEOUT, 10000).
 
+%% Use this to easily check for issues in the server
 -define(DEBUG, true).
 -ifdef(DEBUG).
 -define(DEBUG_PRINT(Format, Values),
@@ -11,17 +12,28 @@
 -define(DEBUG_PRINT(Format, Values), ok).
 -endif.
 
+%% Need to use siftbulk_ftp for external calls for proper mocking with meck.
 -ifdef(TEST).
 -compile(export_all).
+-define(DO_CONNECT(Host, Port), (siftbulk_ftp:do_connect(Host, Port))).
+-define(DO_LOGIN(Socket, Username, Password),
+        (siftbulk_ftp:do_login(Socket, Username, Password))).
+-else.
+-define(DO_CONNECT(Host, Port), (do_connect(Host, Port))).
+-define(DO_LOGIN(Socket, Username, Password),
+        (do_login(Socket, Username, Password))).
 -endif.
 
-connect(Host, Port, User, Password) ->
-    case do_connect(Host, Port) of
+%% Connects to the ftp server using the passed in connection information.
+
+-spec connect(string(), non_neg_integer(), string(), string()) -> {ok, port()}.
+connect(Host, Port, User, Password) when is_integer(Port) ->
+    case ?DO_CONNECT(Host, Port) of
         {ok, Socket, Message} ->
-            ?DEBUG_PRINT("connect ~p~n", [Message]),
-            do_login(Socket, User, Password);
+            ?DEBUG_PRINT("Connect to server ~p~n", [Message]),
+            ?DO_LOGIN(Socket, User, Password);
         {error, Error} ->
-            ?DEBUG_PRINT("connect error ~p~n", [Error]),
+            ?DEBUG_PRINT("Connect to server error ~p~n", [Error]),
             {error, Error}
     end.
 
@@ -56,6 +68,9 @@ do_login(Socket, Username, Password) ->
             {error, _Other}
     end.
 
+% Transforms the command into a format that will be accepted by the ftp server.
+
+-spec make_command(string(), string()) -> binary().
 make_command(Command, Argument) ->
     iolist_to_binary([io_lib:format("~s ~s", [Command, Argument]), "\r\n"]).
 
