@@ -22,7 +22,7 @@ SiftLogic LLC hereby grants to SiftLogic Customers a revocable, non-exclusive, n
 Installation
 ============
 
-Make sure Erlang \>= <b>R15B3</b> is installed, then compile and generate: 
+Make sure Erlang \>= <b>R15B1</b> is installed, then compile and generate: 
 <pre>
   <code>
     ./rebar get-deps compile generate

@@ -16,95 +16,117 @@
 -ifdef(TEST).
 -compile(export_all).
 -define(DO_CONNECT(Host, Port), (siftbulk_ftp:do_connect(Host, Port))).
--define(DO_LOGIN(Socket, Username, Password),
-        (siftbulk_ftp:do_login(Socket, Username, Password))).
+-define(DO_LOGIN_STEP1(Socket, Username, Password),
+        (siftbulk_ftp:do_login_step1(Socket, Username, Password))).
+-define(DO_LOGIN_STEP2, fun siftbulk_ftp:do_login_step2/2).
+-define(READ_REPLY(Socket, Timeout), 
+        (siftbulk_ftp:read_reply(Socket, Timeout))).
+-define(READ_REPLY(Socket, Timeout, Code, Acc), 
+        (siftbulk_ftp:read_reply(Socket, Timeout, Code, Acc))).
+-define(READ_REPLY_CALL, fun siftbulk_ftp:read_reply_call/4).
 -else.
 -define(DO_CONNECT(Host, Port), (do_connect(Host, Port))).
--define(DO_LOGIN(Socket, Username, Password),
-        (do_login(Socket, Username, Password))).
+-define(DO_LOGIN_STEP1(Socket, Username, Password),
+        (do_login_step1(Socket, Username, Password))).
+-define(DO_LOGIN_STEP2,fun do_login_step2/2).
+-define(READ_REPLY(Socket, Timeout), 
+        (read_reply(Socket, Timeout))).
+-define(READ_REPLY(Socket, Timeout, Code, Acc), 
+        (siftbulk_ftp:read_reply(Socket, Timeout, Code, Acc))).
+-define(READ_REPLY_CALL, fun read_reply_call/4).
 -endif.
 
-%% Connects to the ftp server using the passed in connection information.
+%% Logins to the ftp server using the passed in connection information.
 
--spec connect(string(), non_neg_integer(), string(), string()) -> {ok, port()}.
+-spec connect(string(), non_neg_integer(), string(), string()) -> 
+    {ok, port()} | {error, any()}.
 connect(Host, Port, User, Password) when is_integer(Port) ->
     case ?DO_CONNECT(Host, Port) of
         {ok, Socket, Message} ->
             ?DEBUG_PRINT("Connect to server ~p~n", [Message]),
-            ?DO_LOGIN(Socket, User, Password);
+            ?DO_LOGIN_STEP1(Socket, User, Password);
         {error, Error} ->
             ?DEBUG_PRINT("Connect to server error ~p~n", [Error]),
             {error, Error}
     end.
 
+-spec do_connect(string(), non_neg_integer()) -> 
+    {ok, port(), binary()} | {error, any()}.
 do_connect(Host, Port) ->
   case gen_tcp:connect(Host, Port, [binary, {packet, line},
                                     {keepalive, true}, {active, false}]) of
     {ok, Socket} ->
-      case read_possible_multiline_reply(Socket, ?TIMEOUT) of
-        {ok, _Code, <<"220", Banner/binary>> = _Msg} ->
-          {ok, Socket, Banner};
-        _Other ->
-            {error, _Other}
-      end;
+        case ?READ_REPLY(Socket, ?TIMEOUT) of
+            {ok, _Code, <<"220", " ", Banner/binary>> = _Msg} ->
+                {ok, Socket, Banner};
+            _Other ->
+                {error, _Other}
+        end;
     {error, Reason} ->
-      {error, Reason}
+        {error, Reason}
   end.
 
-do_login(Socket, Username, Password) ->
+-spec do_login_step1(port(), string(), string()) -> {ok, port()} | {error, any()}.
+do_login_step1(Socket, Username, Password) ->
     ok = gen_tcp:send(Socket, make_command("USER", Username)),
-    case read_possible_multiline_reply(Socket, ?TIMEOUT) of
+    case ?READ_REPLY(Socket, ?TIMEOUT) of
         {ok, <<"331">>, MessageOuter} ->
             ?DEBUG_PRINT("user ~p~n", [MessageOuter]),
-            ok = gen_tcp:send(Socket, make_command("PASS", Password)),
-            case read_possible_multiline_reply(Socket, ?TIMEOUT) of
-                {ok, <<"230">>, MessageInner} ->
-                    ?DEBUG_PRINT("pass ~p~n", [MessageInner]),
-                    {ok, Socket};
-                _Other ->
-                    {error, _Other}
-            end;
+            ?DO_LOGIN_STEP2(Socket, Password);
         _Other ->
             {error, _Other}
     end.
 
-% Transforms the command into a format that will be accepted by the ftp server.
+%% I need to do this because otherwise I would need to return different values 
+%% based on the exact same arguments to ?READ_REPLY which is
+%% impossible.
+
+-spec do_login_step2(port(), string()) -> {ok, port()} | {error, any()}.
+do_login_step2(Socket, Password) ->
+    ok = gen_tcp:send(Socket, make_command("PASS", Password)),
+    case ?READ_REPLY(Socket, ?TIMEOUT) of
+        {ok, <<"230">>, MessageInner} ->
+            ?DEBUG_PRINT("pass ~p~n", [MessageInner]),
+            {ok, Socket};
+        _Other ->
+            {error, _Other}
+    end.
+
+%% Transforms the command into a format that will be accepted by the ftp server.
 
 -spec make_command(string(), string()) -> binary().
 make_command(Command, Argument) ->
     iolist_to_binary([io_lib:format("~s ~s", [Command, Argument]), "\r\n"]).
 
--spec read_possible_multiline_reply(port(),
-                                    non_neg_integer() | 'infinity') ->
-                                        {ok, binary(), binary()}.
-read_possible_multiline_reply(Socket, Timeout) ->
-    case gen_tcp:recv(Socket, 0, Timeout) of
-        {ok, <<Code:3/binary, "-", _/binary>> = Packet} ->
-            read_multiline_reply(Socket, Timeout, Code, [Packet]);
-        {ok, <<Code:3/binary, Sep, _/binary>> = Packet}
-          when Sep =:= $\s; %% That's a space, which is expected.
-               Sep =:= $\r -> %% What are standards for, right?
-            {ok, Code, Packet};
-        {ok, Packet} ->
-            ReasonMsg = <<"Error in read_possible_multiline_reply">>,
-            {error, ReasonMsg};
-        {error, Reason} ->
-            {error, Reason}
-    end.
+%% Assemble the multiple lines of packets.
 
--spec read_multiline_reply(port(),
-                           non_neg_integer() | 'infinity',
-                           binary(),
-                           [binary()]) ->
-                               {ok, binary(), binary()}.
-read_multiline_reply(Socket, Timeout, Code, Acc) ->
+-spec read_reply(port(),
+                 non_neg_integer() | 'infinity',
+                 binary(),
+                 [binary()]) ->
+                     {ok, binary(), binary()}.
+read_reply(Socket, Timeout) ->
+    read_reply(Socket, Timeout, undefined, []).
+
+read_reply(Socket, Timeout, PreviousCode, Acc) ->
     case gen_tcp:recv(Socket, 0, Timeout) of
-        {ok, <<Code:3/binary, " ", _/binary>> = Packet} ->
+        {ok, <<Code:3/binary, "-", _/binary>> = Packet} 
+          when PreviousCode =:= undefined;
+               PreviousCode =:= Code ->
+            ?READ_REPLY_CALL(Socket, Timeout, Code, [Packet | Acc]);
+        {ok, <<Code:3/binary, Sep, _/binary>> = Packet}
+          when (Sep =:= $\s orelse %% That's a space, which is expected.
+                Sep =:= $\r) andalso 
+               (PreviousCode =:= undefined orelse
+                PreviousCode =:= Code) -> %% What are standards for, right?
             {ok, Code, list_to_binary(lists:reverse([Packet | Acc]))};
-        {ok, <<Code:3/binary, "-", _/binary>> = Packet} ->
-            read_multiline_reply(Socket, Timeout, Code, [Packet | Acc]);
         {ok, Packet} ->
             {error, lists:reverse([Packet | Acc])};
         {error, Reason} ->
             {error, Reason}
     end.
+
+%% So read_reply can be stubbed without causing infinite recursion
+
+read_reply_call(Socket, Timeout, PreviousCode, Acc) ->
+    read_reply(Socket, Timeout, PreviousCode, Acc).
