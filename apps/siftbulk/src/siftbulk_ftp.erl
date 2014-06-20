@@ -53,18 +53,18 @@ connect(Host, Port, User, Password) when is_integer(Port) ->
 -spec do_connect(string(), non_neg_integer()) -> 
     {ok, port(), string()} | {error, any()}.
 do_connect(Host, Port) ->
-  case gen_tcp:connect(Host, Port, [binary, {packet, line},
-                                    {keepalive, true}, {active, false}]) of
-    {ok, Socket} ->
-        case ?READ_REPLY(Socket, ?TIMEOUT) of
-            {ok, _Code, <<"220", " ", Banner/binary>> = _Msg} ->
-                {ok, Socket, Banner};
-            _Other ->
-                {error, _Other}
-        end;
-    {error, Reason} ->
-        {error, Reason}
-  end.
+    case gen_tcp:connect(Host, Port, [binary, {packet, line},
+                                        {keepalive, true}, {active, false}]) of
+        {ok, Socket} ->
+            case ?READ_REPLY(Socket, ?TIMEOUT) of
+                {ok, _Code, <<"220", Banner/binary>> = _Msg} ->
+                    {ok, Socket, Banner};
+                _Other ->
+                    {error, _Other}
+            end;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 -spec do_login_step1(port(), string(), string()) -> {ok, port()} | {error, any()}.
 do_login_step1(Socket, Username, Password) ->

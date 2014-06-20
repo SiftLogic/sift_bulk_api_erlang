@@ -5,7 +5,7 @@
 -include("../include/siftbulk.hrl").
 
 -export([start_link/0, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
--export([set_opts/1, get_opts/0, init/1, connect/0, upload/1, stop/0]).
+-export([set_opts/1, get_opts/0, init/1, connect/0, stop/0]).
 
 -type connection_part() :: {atom(), any()}.
 -type connection_list() :: list(connection_part()).
@@ -39,14 +39,13 @@ set_opts(#state{opts = OldOpts} = State, [Field | Tail], Opts) ->
             set_opts(State, Tail, Opts)
     end.
 
-% connect(Opts) ->
-%     Username = proplists:get_value(username, Opts),
-%     Password = proplists:get_value(password, Opts),
-
-%     {ok, Pid} = inets:start(ftpc, [{host, proplists:get_value(host, Opts)},
-%                                    {debug, debug}]),
-%     ok = ftp:user(Pid, Username, Password),
-%     Pid.
+-spec connect(connection_list()) -> 
+    {ok, port()} | {error, any()}.
+connect(Opts) ->
+    siftbulk_ftp:connect(proplists:get_value(host, Opts),
+                         proplists:get_value(port, Opts),
+                         proplists:get_value(username, Opts),
+                         proplists:get_value(password, Opts)).
 
 % upload(File, Opts) ->
 %     io:format("uploading the file: ~p~n", File),
@@ -58,7 +57,8 @@ set_opts(#state{opts = OldOpts} = State, [Field | Tail], Opts) ->
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-%% Initializes the API server with FTP connection options:
+%% Initializes the API server with FTP connection options, retrieved from
+%% sys.config:
 %% user: The username to get into the ftp server.
 %% password: The password to get into the ftp server.
 %% host: The host to connect to. Defaults to localhost.
@@ -78,14 +78,14 @@ init([]) ->
 
 %% Uses the passed in configuration options to connect to the server.
 
--spec connect() -> {atom(), pid()}.
+-spec connect() -> {atom(), pid()} | {error, atom()}.
 connect() ->
     gen_server:call(?MODULE, connect).
 
 % Changes to the upload directory then uploads the specified file.
-
-upload(File) ->
-    gen_server:call(?MODULE, {upload, File}).
+%
+% upload(File) ->
+%     gen_server:call(?MODULE, {upload, File}).
 
 %% Handles all synchronous calls to the server. See specific functions for more
 %% detailed information.
@@ -94,6 +94,8 @@ upload(File) ->
                      {reply, ok, #state{}};
                  (get_opts, any(), #state{}) -> 
                      {reply, connection_list(), #state{}};
+                 (connect, any(), #state{}) -> 
+                     {reply, {ok, port()} | {error, any()}, #state{}};
                  (stop, any(), any()) -> 
                      {stop, normal, ok, any()}.
 handle_call({set_opts, Opts}, _From, State) ->
@@ -101,9 +103,13 @@ handle_call({set_opts, Opts}, _From, State) ->
     {reply, ok, NewState};
 handle_call(get_opts, _From, #state{opts = Opts} = State) ->
     {reply, Opts, State};
-% handle_call(connect, _From, #state{opts = Opts} = State) ->
-%     {ok, Pid} = connect(Opts),
-%     {reply, ok, State#state{connection = Pid}};
+handle_call(connect, _From, #state{opts = Opts} = State) ->
+    case connect(Opts) of
+        {ok, Pid} ->
+            {reply, {ok, Pid}, State#state{connection = Pid}};
+        {error, Error} ->
+            {reply, {error, Error}, State}
+    end;
 % handle_call({upload, File}, _From, #state{opts = Opts} = State) ->
 %     ok = upload(File, Opts),
 %     {reply, ok, State};

@@ -219,7 +219,7 @@ test_do_connect_success_multiline_success() ->
 
     Result = siftbulk_ftp:do_connect("localhost", 21),
     
-    ?assertEqual(Result, {ok, Socket, <<"The banner">>}).
+    ?assertEqual(Result, {ok, Socket, <<" The banner">>}).
 
 %% do_login_step1
 

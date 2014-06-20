@@ -20,12 +20,18 @@ init_test_() ->
     {"Verifies that init sets default and values when appropriate",
      ?setup([fun test_init_default_empty/0])}.
 
+connect_test_() ->
+    {"Verifies that init sets default and values when appropriate",
+     ?setup_mock([fun test_connect_failure/0,
+                  fun test_connect_success/0])}.
+
 handle_call_test_() ->
     {"Verifies that it sends calls to all of the relevant functions",
-     ?setup([fun test_handle_call_set_opts/0,
-             fun test_handle_call_get_opts/0,
-             fun test_handle_call_stop/0,
-             fun test_handle_call_default/0])}.
+     ?setup_mock([fun test_handle_call_set_opts/0,
+                  fun test_handle_call_get_opts/0,
+                  fun test_handle_call_connect/0,
+                  fun test_handle_call_stop/0,
+                  fun test_handle_call_default/0])}.
 
 handle_cast_test_() ->
     {"Verifies that it sends casts to all of the relevant functions",
@@ -55,6 +61,15 @@ start() ->
  
 stop(_) ->
     ok = quiet_stop(siftbulk).
+
+start_mock() ->
+    start(),
+    meck:new(siftbulk_ftp, [unstick]).
+ 
+stop_mock(_Arg) ->
+    meck:validate(siftbulk_ftp),
+    meck:unload(siftbulk_ftp),
+    ok = stop(_Arg).
 
 %%%%%%%%%%%%%%%%%%%%
 %%% ACTUAL TESTS %%%
@@ -94,7 +109,21 @@ test_init_default_empty() ->
     ?assertEqual({ok, #state{}}, 
                  siftbulk:init([])).
 
-%% handle_call
+%% connect
+
+test_connect_failure() ->
+    Error = {error, "Error"},
+    meck:expect(siftbulk_ftp, connect, fun(_, _, _, _) -> Error end),
+
+    ?assertEqual(Error, siftbulk:connect()).
+
+test_connect_success() ->
+    Message = {ok, "Socket"},
+    meck:expect(siftbulk_ftp, connect, fun(_, _, _, _) -> Message end),
+
+    ?assertEqual(Message, siftbulk:connect()).
+
+%% handle_call (Some of the branch logic is tested by public functions)
 
 test_handle_call_set_opts() ->
     Opts = [{username, "TestKey"}],
@@ -108,6 +137,14 @@ test_handle_call_set_opts() ->
 test_handle_call_get_opts() ->
     ?assertEqual({reply, ?DEFAULT_OPTS_INFO, #state{}}, 
                  siftbulk:handle_call(get_opts, undefined, #state{})).
+
+test_handle_call_connect() ->
+    %% Simulating socket as a string instead of having to open a connection
+    Socket = "Socket",
+    meck:expect(siftbulk_ftp, connect, fun(_, _, _, _) -> {ok, Socket} end),
+
+    ?assertEqual({reply, {ok, Socket}, #state{connection = Socket}}, 
+                 siftbulk:handle_call(connect, undefined, #state{})).
 
 test_handle_call_stop() ->
     ?assertEqual({stop, normal, ok, #state{}}, 
