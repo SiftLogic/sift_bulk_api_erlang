@@ -51,7 +51,7 @@ connect(Host, Port, User, Password) when is_integer(Port) ->
     end.
 
 -spec do_connect(string(), non_neg_integer()) -> 
-    {ok, port(), binary()} | {error, any()}.
+    {ok, port(), string()} | {error, any()}.
 do_connect(Host, Port) ->
   case gen_tcp:connect(Host, Port, [binary, {packet, line},
                                     {keepalive, true}, {active, false}]) of
@@ -102,7 +102,7 @@ make_command(Command, Argument) ->
 
 -spec read_reply(port(),
                  non_neg_integer() | 'infinity',
-                 binary(),
+                 binary() | undefined,
                  [binary()]) ->
                      {ok, binary(), binary()}.
 read_reply(Socket, Timeout) ->
@@ -128,5 +128,10 @@ read_reply(Socket, Timeout, PreviousCode, Acc) ->
 
 %% So read_reply can be stubbed without causing infinite recursion
 
+-spec read_reply_call(port(),
+                 non_neg_integer() | 'infinity',
+                 binary() | undefined,
+                 [binary()]) ->
+                     {ok, binary(), binary()}.
 read_reply_call(Socket, Timeout, PreviousCode, Acc) ->
     read_reply(Socket, Timeout, PreviousCode, Acc).
