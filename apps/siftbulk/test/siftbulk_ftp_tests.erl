@@ -30,9 +30,10 @@ read_reply_test_() ->
 do_connect_test_() ->
     {"Verifies it reads the reply and returns the banner or sends back the 
       right error",
-     ?setup_mock([fun test_do_connect_failure/0,
-                  fun test_do_connect_success_multiline_failure/0,
-                  fun test_do_connect_success_multiline_success/0])}.
+     ?setup_mock([fun test_do_connect_failure_no_login/0,
+                  fun test_do_connect_success_multiline_failure_no_login/0,
+                  fun test_do_connect_success_multiline_success_no_login/0,
+                  fun test_do_connect_success_multiline_success_logged_in/0])}.
 
 do_login_step1_test_() ->
     {"Verifies that a USER command is either parsed or handled via relevant
@@ -188,14 +189,15 @@ test_read_reply_success_last_line() ->
 
 %% do_connect
 
-test_do_connect_failure() ->
-    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2) ->
+test_do_connect_failure_no_login() ->
+    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2, Arg3) ->
                                               meck:passthrough([Arg1,
-                                                                Arg2]) end),
+                                                                Arg2,
+                                                                Arg3]) end),
     meck:expect(gen_tcp, connect, fun(_, _, _) -> 
                                       {error, "An Error"} end),
 
-    Result = siftbulk_ftp:do_connect("localhost", 21),
+    Result = siftbulk_ftp:do_connect("localhost", 21, false),
 
     ?assert(meck:called(gen_tcp, connect,["localhost", 21, [binary,
                                                             {packet, line},
@@ -203,34 +205,47 @@ test_do_connect_failure() ->
                                                             {active, false}]])),
     ?assertEqual(Result, {error, "An Error"}).
 
-test_do_connect_success_multiline_failure() ->
+test_do_connect_success_multiline_failure_no_login() ->
     %% Socket does not need to be a socket object because do_login_step1 is
     %% mocked
-    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2) ->
+    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2, Arg3) ->
                                               meck:passthrough([Arg1,
-                                                                Arg2]) end),
+                                                                Arg2,
+                                                                Arg3]) end),
     meck:expect(gen_tcp, connect, fun(_, _, _) -> {ok, "Socket"} end),
     meck:expect(siftbulk_ftp, read_reply, 
                 fun(_, _) -> "Error" end),
 
-    Result = siftbulk_ftp:do_connect("localhost", 21),
+    Result = siftbulk_ftp:do_connect("localhost", 21, false),
     
     ?assert(meck:called(siftbulk_ftp, read_reply,
                         ["Socket", 10000])),
     ?assertEqual(Result, {error, "Error"}).
 
-test_do_connect_success_multiline_success() ->
+test_do_connect_success_multiline_success_no_login() ->
     Socket = "Socket",
-    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2) ->
+    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2, Arg3) ->
                                               meck:passthrough([Arg1,
-                                                                Arg2]) end),
+                                                                Arg2,
+                                                                Arg3]) end),
     meck:expect(gen_tcp, connect, fun(_, _, _) -> {ok, Socket} end),
     meck:expect(siftbulk_ftp, read_reply, 
                 fun(_, _) -> {ok, Socket, <<"220 The banner">>} end),
 
-    Result = siftbulk_ftp:do_connect("localhost", 21),
+    Result = siftbulk_ftp:do_connect("localhost", 21, false),
     
     ?assertEqual(Result, {ok, Socket, <<" The banner">>}).
+
+test_do_connect_success_multiline_success_logged_in() ->
+    meck:expect(siftbulk_ftp, do_connect, fun(Arg1, Arg2, Arg3) ->
+                                              meck:passthrough([Arg1,
+                                                                Arg2,
+                                                                Arg3]) end),
+    meck:expect(gen_tcp, connect, fun(_, _, _) -> {ok, "A Message"} end),
+
+    Result = siftbulk_ftp:do_connect("localhost", 21, true),
+    
+    ?assertEqual(Result, {ok, "A Message"}).
 
 %% do_login_step1
 
@@ -309,32 +324,32 @@ test_connect_failure() ->
     meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
                                             meck:passthrough([Arg1, Arg2, Arg3,
                                                               Arg4]) end),
-    meck:expect(siftbulk_ftp, do_connect, fun(_, _) -> {error, "An Error"} end),
+    meck:expect(siftbulk_ftp, do_connect, fun(_, _, _) -> {error, "An Error"} end),
 
     Result = siftbulk_ftp:connect("localhost", 21, "TestKey", "123fd-4"),
 
-    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21])),
+    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21, false])),
     ?assertEqual(Result, {error, "An Error"}).
 
 test_connect_success_login_failure() ->
     meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
                                             meck:passthrough([Arg1, Arg2, Arg3,
                                                               Arg4]) end),
-    meck:expect(siftbulk_ftp, do_connect, fun(_, _) -> 
+    meck:expect(siftbulk_ftp, do_connect, fun(_, _, _) -> 
                                               {ok, "Socket", "A Message"} end),
     meck:expect(siftbulk_ftp, do_login_step1, fun(_, _, _) -> 
                                                   {error, "An Error"} end),
 
     Result = siftbulk_ftp:connect("localhost", 21, "TestKey", "123fd-4"),
 
-    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21])),
+    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21, false])),
     ?assertEqual(Result, {error, "An Error"}).
 
 test_connect_success_login_success() ->
     meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
                                             meck:passthrough([Arg1, Arg2, Arg3,
                                                               Arg4]) end),
-    meck:expect(siftbulk_ftp, do_connect, fun(_, _) -> 
+    meck:expect(siftbulk_ftp, do_connect, fun(_, _, _) -> 
                                               {ok, "Socket", "A Message"} end),
     meck:expect(siftbulk_ftp, do_login_step1, fun(Socket, _, _) -> 
                                                   {ok, Socket} end),
@@ -343,5 +358,5 @@ test_connect_success_login_success() ->
 
     Result = siftbulk_ftp:connect("localhost", 21, "TestKey", "123fd-4"),
 
-    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21])),
+    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21, false])),
     ?assertEqual(Result, {ok, "Socket"}).

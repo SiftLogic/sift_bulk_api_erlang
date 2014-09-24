@@ -15,7 +15,7 @@
 %% Need to use siftbulk_ftp for external calls for proper mocking with meck.
 -ifdef(TEST).
 -compile(export_all).
--define(DO_CONNECT(Host, Port), (siftbulk_ftp:do_connect(Host, Port))).
+-define(DO_CONNECT(Host, Port, IsLoggedIn), (siftbulk_ftp:do_connect(Host, Port, IsLoggedIn))).
 -define(DO_LOGIN_STEP1(Socket, Username, Password),
         (siftbulk_ftp:do_login_step1(Socket, Username, Password))).
 -define(DO_LOGIN_STEP2, fun siftbulk_ftp:do_login_step2/2).
@@ -26,7 +26,7 @@
         (siftbulk_ftp:read_reply(Socket, Timeout, Code, Acc))).
 -define(READ_REPLY_CALL, fun siftbulk_ftp:read_reply_call/4).
 -else.
--define(DO_CONNECT(Host, Port), (do_connect(Host, Port))).
+-define(DO_CONNECT(Host, Port, IsLoggedIn), (do_connect(Host, Port, IsLoggedIn))).
 -define(DO_LOGIN_STEP1(Socket, Username, Password),
         (do_login_step1(Socket, Username, Password))).
 -define(DO_LOGIN_STEP2,fun do_login_step2/2).
@@ -71,7 +71,7 @@
 -spec connect(string(), non_neg_integer(), string(), string()) -> 
     {ok, port()} | {error, any()}.
 connect(Host, Port, User, Password) when is_integer(Port) ->
-    case ?DO_CONNECT(Host, Port) of
+    case ?DO_CONNECT(Host, Port, false) of
         {ok, Socket, Message} ->
             ?DEBUG_PRINT("Connected to server ~p~n", [Message]),
 
@@ -86,20 +86,29 @@ connect(Host, Port, User, Password) when is_integer(Port) ->
             {error, Reason}
     end.
 
--spec do_connect(string(), non_neg_integer()) -> 
+%% Connects and waits for a response expects a banner and parses it if not logged in. If logged it
+%% just returns the reply.
+
+-spec do_connect(string(), non_neg_integer(), boolean()) -> 
     {ok, port(), string()} | {error, any()}.
-do_connect(Host, Port) ->
-    case gen_tcp:connect(Host, Port, [binary, {packet, line},
-                                        {keepalive, true}, {active, false}]) of
-        {ok, Socket} ->
-            case ?READ_REPLY(Socket, ?TIMEOUT) of
-                {ok, _Code, <<"220", Banner/binary>> = _Msg} ->
-                    {ok, Socket, Banner};
-                _Other ->
-                    {error, _Other}
-            end;
-        {error, Reason} ->
-            {error, Reason}
+do_connect(Host, Port, IsLoggedIn) ->
+    case IsLoggedIn of
+        true ->
+            gen_tcp:connect(Host, Port, [binary, {packet, line},
+                                         {keepalive, true}, {active, true}]);
+        false ->
+            case gen_tcp:connect(Host, Port, [binary, {packet, line},
+                                              {keepalive, true}, {active, false}]) of
+                {ok, Socket} ->
+                    case ?READ_REPLY(Socket, ?TIMEOUT) of
+                        {ok, _Code, <<"220", Banner/binary>> = _Msg} ->
+                            {ok, Socket, Banner};
+                        _Other ->
+                            {error, _Other}
+                    end;
+                {error, Reason} ->
+                    {error, Reason}
+            end
     end.
 
 -spec do_login_step1(port(), string(), string()) -> {ok, port()} | {error, any()}.
@@ -151,10 +160,9 @@ do_get_passive(Socket) ->
             Port = calculate_port(Port1, Port2),
 
             ?DEBUG_PRINT("pasv ~p ~p~n", [Host, Port]),
-            case ?DO_CONNECT(Host, Port) of
-                {ok, PassiveSocket, Message} ->
-                    ?DEBUG_PRINT("Passive connect to server ~p~n", [Message]),
-                    ?DEBUG_PRINT("New Socket", [PassiveSocket]),
+            case ?DO_CONNECT(Host, Port, true) of
+                {ok, PassiveSocket} ->
+                    ?DEBUG_PRINT("1 New Socket ~p~n", [PassiveSocket]),
                     {ok, Socket};
                 {error, Reason} ->
                     ?DEBUG_PRINT("Passive connect error ~p~n", [Reason]),

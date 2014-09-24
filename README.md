@@ -45,6 +45,13 @@ and to test:
   </code>
 </pre>
 
+Usage
+=====
+
+Via the erlang console with the app loaded:
+1. Edit sys.config with the right parameters and generate the file (make sure to remove the rel/siftbulk directory first)
+2. Connect to the ftp server: <code>siftbulk:connect()</code>
+
 Configuration
 =============
 
