@@ -25,7 +25,7 @@ Installation
 Make sure Erlang \>= <b>R15B1</b> is installed, then compile and generate: 
 <pre>
   <code>
-    ./rebar get-deps compile generate
+    ./rebar get-deps clean compile generate
   </code>
 </pre>
 
@@ -61,3 +61,5 @@ This project uses the [standard application layout structure](http://www.erlang.
 * **rel:** Rebar release will be generated here, see rebar.config.
 * **rebar:** Rebar binary.
 * **rebar.config:** Description of how Rebar should generate things.
+* **sys.config:** Configuration for the application, default connection options are set here.
+* **test.csv:** A small sample records file.

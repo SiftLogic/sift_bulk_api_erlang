@@ -5,7 +5,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% TESTS DESCRIPTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
-% This code, due to the ftp dependency, has a lot of side effects
+%% This code, due to the ftp dependency, has a lot of side effects. So privates
+%% will be tested.
 make_command_test_() ->
     {"Verifies that the passed in are converted to a correct format and it is
       in binary form",
@@ -14,19 +15,17 @@ make_command_test_() ->
              fun test_make_command_empty_command/0,
              fun test_make_command_filled_in/0])}.
 
-read_reply_failure_test_() ->
+calculate_port_test_() ->
+    {"Verifies that the correct port integer is returned",
+     ?setup([fun test_calculate_port_zeroes/0,
+             fun test_calculate_port_normal/0])}.
+
+read_reply_test_() ->
     {"Verifies a line from a response is read in the correct way",
      ?setup_mock([fun test_read_reply_failure/0,
                   fun test_read_reply_failure_on_ok/0,
                   fun test_read_reply_success_not_last_line/0,
                   fun test_read_reply_success_last_line/0])}.
-
-% read_possible_multiline_reply_test_()->
-%     {"Verifies a response can be read if it is multi or single line or it will
-%       give specific error messages",
-%      ?setup_mock([fun test_read_possible_multiline_reply_failure/0,
-%                   fun test_read_possible_multiline_reply_failure_on_ok/0,
-%                   fun test_read_possible_multiline_reply_success_single/0])}.
 
 do_connect_test_() ->
     {"Verifies it reads the reply and returns the banner or sends back the 
@@ -50,7 +49,8 @@ do_login_step2_test_() ->
 connect_test_() ->
     {"Verifies it returns the result of a login or sends back an error message",
      ?setup_mock([fun test_connect_failure/0,
-                  fun test_connect_success/0])}.
+                  fun test_connect_success_login_failure/0,
+                  fun test_connect_success_login_success/0])}.
 
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
@@ -76,6 +76,9 @@ stop_mock(_Arg) ->
 %%%%%%%%%%%%%%%%%%%%
 %%% ACTUAL TESTS %%%
 %%%%%%%%%%%%%%%%%%%%
+
+%% make command
+
 test_make_command_empty() ->
     ?assertEqual(<<" \r\n">>, siftbulk_ftp:make_command("", "")).
 
@@ -88,6 +91,14 @@ test_make_command_empty_command() ->
 test_make_command_filled_in() ->
     ?assertEqual(<<"RECV test.csv\r\n">>,
                  siftbulk_ftp:make_command("RECV", "test.csv")).
+
+%% calculate_port
+
+test_calculate_port_zeroes() ->
+    ?assertEqual(0, siftbulk_ftp:calculate_port(<<"0">>, <<"0">>)).
+
+test_calculate_port_normal() ->
+    ?assertEqual(25601, siftbulk_ftp:calculate_port(<<"100">>, <<"1">>)).
 
 %% read_reply
 
@@ -294,6 +305,7 @@ test_do_login_step2_multiline_success() ->
 %% connect
 
 test_connect_failure() ->
+    %% Socket does not need to be a socket object because do_login is mocked
     meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
                                             meck:passthrough([Arg1, Arg2, Arg3,
                                                               Arg4]) end),
@@ -304,14 +316,29 @@ test_connect_failure() ->
     ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21])),
     ?assertEqual(Result, {error, "An Error"}).
 
-test_connect_success() ->
-    %% Socket does not need to be a socket object because do_login is mocked
+test_connect_success_login_failure() ->
+    meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
+                                            meck:passthrough([Arg1, Arg2, Arg3,
+                                                              Arg4]) end),
+    meck:expect(siftbulk_ftp, do_connect, fun(_, _) -> 
+                                              {ok, "Socket", "A Message"} end),
+    meck:expect(siftbulk_ftp, do_login_step1, fun(_, _, _) -> 
+                                                  {error, "An Error"} end),
+
+    Result = siftbulk_ftp:connect("localhost", 21, "TestKey", "123fd-4"),
+
+    ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21])),
+    ?assertEqual(Result, {error, "An Error"}).
+
+test_connect_success_login_success() ->
     meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
                                             meck:passthrough([Arg1, Arg2, Arg3,
                                                               Arg4]) end),
     meck:expect(siftbulk_ftp, do_connect, fun(_, _) -> 
                                               {ok, "Socket", "A Message"} end),
     meck:expect(siftbulk_ftp, do_login_step1, fun(Socket, _, _) -> 
+                                                  {ok, Socket} end),
+    meck:expect(siftbulk_ftp, do_get_passive, fun(Socket) -> 
                                                   {ok, Socket} end),
 
     Result = siftbulk_ftp:connect("localhost", 21, "TestKey", "123fd-4"),
