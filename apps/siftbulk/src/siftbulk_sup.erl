@@ -1,19 +1,25 @@
+%% Supervises all the clients
 -module(siftbulk_sup).
 -behaviour(supervisor).
--export([start_link/1, init/1]).
+-export([start_link/0, init/1]).
 
-start_link(Args) ->
-    supervisor:start_link(?MODULE, Args).
+start_link() ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-init(_Args) ->
-    Restart = {one_for_one, 2, 5},
-    C0 = {siftbulk,
+init([]) ->
+    Restart = {one_for_all, 2, 5},
+    Child0 = {siftbulk,
           {siftbulk, start_link, []},
           permanent,
           200, % ms
           worker,
           [siftbulk]
          },
-    {ok,{Restart, [C0]}}.
-
-
+     Child1 = {siftbulk_client_sup,
+      {siftbulk_client_sup, start_link, []},
+      permanent,
+      200, % ms
+      supervisor,
+      [siftbulk_client_sup]
+     },
+    {ok,{Restart, [Child0, Child1]}}.
