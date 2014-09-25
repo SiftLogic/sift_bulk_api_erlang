@@ -47,6 +47,13 @@ do_login_step2_test_() ->
      ?setup_mock([fun test_do_login_step2_multiline_failure/0,
                   fun test_do_login_step2_multiline_success/0])}.
 
+do_get_passive_test_() ->
+    {"Verifies that a PASV command is made and a socket it retrieved using
+      returned connection details",
+     ?setup_mock([fun test_do_get_passive_failure/0,
+                  fun test_do_get_passive_do_connect_failure/0,
+                  fun test_do_get_passive_success/0])}.
+
 connect_test_() ->
     {"Verifies it returns the result of a login or sends back an error message",
      ?setup_mock([fun test_connect_failure/0,
@@ -317,6 +324,62 @@ test_do_login_step2_multiline_success() ->
                         [Socket, 10000])),
     ?assertEqual(Result, {ok, Socket}).
 
+%% do_get_passive
+
+test_do_get_passive_failure() ->
+    Socket = "Socket",
+    Response = <<"221 Not the right code.\r\n">>,
+
+    meck:expect(siftbulk_ftp, do_get_passive, 
+                fun(_) -> meck:passthrough([Socket]) end),
+
+    meck:expect(gen_tcp, send, fun(_, _) -> ok end),
+    meck:expect(siftbulk_ftp, read_reply,
+                fun(_, _) -> {error, Response} end),
+
+    Result = siftbulk_ftp:do_get_passive(Socket),
+
+    ?assertEqual(Result, {error, {error, Response}}).
+
+test_do_get_passive_do_connect_failure() ->
+    Socket = "Socket",
+
+    meck:expect(siftbulk_ftp, do_get_passive, 
+                fun(_) -> meck:passthrough([Socket]) end),
+
+    meck:expect(gen_tcp, send, fun(_, _) -> ok end),
+    meck:expect(siftbulk_ftp, read_reply,
+                fun(_, _) -> {ok, <<"227">>,
+                              <<"227 Entering Passive Mode (127,0,0,1,229,76).\r\n">>} end),
+
+    meck:expect(siftbulk_ftp, do_connect,
+                fun(_, _, _) -> {error, "An Error"} end),
+
+    Result = siftbulk_ftp:do_get_passive(Socket),
+
+    ?assertEqual(Result, {error, "An Error"}).
+
+test_do_get_passive_success() ->
+    Socket = "Socket",
+    PassiveSocket = "Passive Socket",
+
+    meck:expect(siftbulk_ftp, do_get_passive, 
+                fun(_) -> meck:passthrough([Socket]) end),
+
+    meck:expect(gen_tcp, send, fun(_, _) -> ok end),
+    meck:expect(siftbulk_ftp, read_reply,
+                fun(_, _) -> {ok, <<"227">>,
+                              <<"227 Entering Passive Mode (127,0,0,1,229,76).\r\n">>} end),
+
+    meck:expect(siftbulk_ftp, do_connect,
+                fun(_, _, _) -> {ok, PassiveSocket} end),
+
+    Result = siftbulk_ftp:do_get_passive(Socket),
+
+    ?assert(meck:called(siftbulk_ftp, do_connect, ["127.0.0.1", 58700, true])),
+
+    ?assertEqual(Result, {ok, Socket, PassiveSocket}).
+
 %% connect
 
 test_connect_failure() ->
@@ -346,17 +409,20 @@ test_connect_success_login_failure() ->
     ?assertEqual(Result, {error, "An Error"}).
 
 test_connect_success_login_success() ->
+    PassiveSocket = "PassiveSocket",
+    Socket = "Socket",
+
     meck:expect(siftbulk_ftp, connect, fun(Arg1, Arg2, Arg3, Arg4) ->
                                             meck:passthrough([Arg1, Arg2, Arg3,
                                                               Arg4]) end),
     meck:expect(siftbulk_ftp, do_connect, fun(_, _, _) -> 
-                                              {ok, "Socket", "A Message"} end),
-    meck:expect(siftbulk_ftp, do_login_step1, fun(Socket, _, _) -> 
-                                                  {ok, Socket} end),
-    meck:expect(siftbulk_ftp, do_get_passive, fun(Socket) -> 
-                                                  {ok, Socket} end),
+                                              {ok, Socket, "A Message"} end),
+    meck:expect(siftbulk_ftp, do_login_step1, fun(SocketI, _, _) -> 
+                                                  {ok, SocketI} end),
+    meck:expect(siftbulk_ftp, do_get_passive, fun(SocketI) -> 
+                                                  {ok, SocketI, PassiveSocket} end),
 
     Result = siftbulk_ftp:connect("localhost", 21, "TestKey", "123fd-4"),
 
     ?assert(meck:called(siftbulk_ftp, do_connect, ["localhost", 21, false])),
-    ?assertEqual(Result, {ok, "Socket"}).
+    ?assertEqual(Result, {ok, Socket, PassiveSocket}).

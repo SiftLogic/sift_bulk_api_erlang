@@ -1,9 +1,10 @@
 -module(siftbulk_ftp).
+
 -export([connect/4]).
 
 -define(TIMEOUT, 10000).
 
-%% Use this to easily check for issues in the server
+%% Use this to easily check for issues in the server.
 -define(DEBUG, true).
 -ifdef(DEBUG).
 -define(DEBUG_PRINT(Format, Values),
@@ -69,7 +70,7 @@
 %% Note: Also, starts a passive mode connection.
 
 -spec connect(string(), non_neg_integer(), string(), string()) -> 
-    {ok, port()} | {error, any()}.
+    {ok, port(), port()} | {error, any()}.
 connect(Host, Port, User, Password) when is_integer(Port) ->
     case ?DO_CONNECT(Host, Port, false) of
         {ok, Socket, Message} ->
@@ -138,18 +139,15 @@ do_login_step2(Socket, Password) ->
 
 %% Gets the new port and IP address to connect from a PASV command.
 
--spec do_get_passive(port()) -> {ok, port()} | {error, any()}.
+-spec do_get_passive(port()) -> {ok, port(), port()} | {error, any()}.
 do_get_passive(Socket) ->
     ok = gen_tcp:send(Socket, make_command("PASV", "")),
     case ?READ_REPLY(Socket, ?TIMEOUT) of
         {ok, <<"227">>, MessageInner} ->
-            ?DEBUG_PRINT("pasv ~p~n", [MessageInner]),
-
             Parts = binary:split(MessageInner, [<<"(">>, <<")">>], [global]),
             IPAndPort = binary:split(lists:nth(2, Parts), <<",">>, [global]),
 
             %% Gen_tcp accepts deep lists (WTF erlang?:( )
-            Hosts = lists:sublist(IPAndPort, 1, 4),
             String1 = binary_to_list(lists:nth(1, IPAndPort)),
             String2 = binary_to_list(lists:nth(2, IPAndPort)),
             String3 = binary_to_list(lists:nth(3, IPAndPort)),
@@ -159,13 +157,10 @@ do_get_passive(Socket) ->
             {Port1, Port2} = {lists:nth(5, IPAndPort), lists:nth(6, IPAndPort)},
             Port = calculate_port(Port1, Port2),
 
-            ?DEBUG_PRINT("pasv ~p ~p~n", [Host, Port]),
             case ?DO_CONNECT(Host, Port, true) of
                 {ok, PassiveSocket} ->
-                    ?DEBUG_PRINT("1 New Socket ~p~n", [PassiveSocket]),
-                    {ok, Socket};
+                    {ok, Socket, PassiveSocket};
                 {error, Reason} ->
-                    ?DEBUG_PRINT("Passive connect error ~p~n", [Reason]),
                     {error, Reason}
             end;
         _Other ->
@@ -214,7 +209,7 @@ read_reply(Socket, Timeout, PreviousCode, Acc) ->
             {error, Reason}
     end.
 
-%% So read_reply can be stubbed without causing infinite recursion
+%% So read_reply can be stubbed without causing infinite recursion.
 
 -spec read_reply_call(port(),
                  non_neg_integer() | 'infinity',

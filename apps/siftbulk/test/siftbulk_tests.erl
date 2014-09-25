@@ -118,10 +118,10 @@ test_connect_failure() ->
     ?assertEqual(Error, siftbulk:connect()).
 
 test_connect_success() ->
-    Message = {ok, "Socket"},
+    Message = {ok, "Socket", "PassiveSocket"},
     meck:expect(siftbulk_ftp, connect, fun(_, _, _, _) -> Message end),
 
-    ?assertEqual(Message, siftbulk:connect()).
+    ?assertEqual({ok, "Socket"}, siftbulk:connect()).
 
 %% handle_call (Some of the branch logic is tested by public functions)
 
@@ -141,9 +141,11 @@ test_handle_call_get_opts() ->
 test_handle_call_connect() ->
     %% Simulating socket as a string instead of having to open a connection
     Socket = "Socket",
-    meck:expect(siftbulk_ftp, connect, fun(_, _, _, _) -> {ok, Socket} end),
+    PassiveSocket = "PassiveSocket",
 
-    ?assertEqual({reply, {ok, Socket}, #state{connection = Socket}}, 
+    meck:expect(siftbulk_ftp, connect, fun(_, _, _, _) -> {ok, Socket, PassiveSocket} end),
+
+    ?assertEqual({reply, {ok, Socket}, #state{connection = Socket, data = PassiveSocket}}, 
                  siftbulk:handle_call(connect, undefined, #state{})).
 
 test_handle_call_stop() ->

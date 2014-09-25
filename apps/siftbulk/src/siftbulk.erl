@@ -105,8 +105,8 @@ handle_call(get_opts, _From, #state{opts = Opts} = State) ->
     {reply, Opts, State};
 handle_call(connect, _From, #state{opts = Opts} = State) ->
     case connect(Opts) of
-        {ok, Pid} ->
-            {reply, {ok, Pid}, State#state{connection = Pid}};
+        {ok, Pid, PassivePid} ->
+            {reply, {ok, Pid}, State#state{connection = Pid, data = PassivePid}};
         {error, Error} ->
             {reply, {error, Error}, State}
     end;
