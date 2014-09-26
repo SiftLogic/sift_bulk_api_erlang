@@ -101,7 +101,7 @@ do_connect(Host, Port, IsLoggedIn) ->
             case gen_tcp:connect(Host, Port, [binary, {packet, line},
                                               {keepalive, true}, {active, false}]) of
                 {ok, Socket} ->
-                    case ?READ_REPLY(Socket, ?TIMEOUT) of
+                    case read_reply(Socket, ?TIMEOUT) of
                         {ok, _Code, <<"220", Banner/binary>> = _Msg} ->
                             {ok, Socket, Banner};
                         _Other ->
@@ -196,7 +196,7 @@ read_reply(Socket, Timeout, PreviousCode, Acc) ->
         {ok, <<Code:3/binary, "-", _/binary>> = Packet} 
           when PreviousCode =:= undefined;
                PreviousCode =:= Code ->
-            ?READ_REPLY_CALL(Socket, Timeout, Code, [Packet | Acc]);
+            read_reply(Socket, Timeout, Code, [Packet | Acc]);
         {ok, <<Code:3/binary, Sep, _/binary>> = Packet}
           when (Sep =:= $\s orelse %% That's a space, which is expected.
                 Sep =:= $\r) andalso 
@@ -208,13 +208,3 @@ read_reply(Socket, Timeout, PreviousCode, Acc) ->
         {error, Reason} ->
             {error, Reason}
     end.
-
-%% So read_reply can be stubbed without causing infinite recursion.
-
--spec read_reply_call(port(),
-                 non_neg_integer() | 'infinity',
-                 binary() | undefined,
-                 [binary()]) ->
-                     {ok, binary(), binary()}.
-read_reply_call(Socket, Timeout, PreviousCode, Acc) ->
-    read_reply(Socket, Timeout, PreviousCode, Acc).
