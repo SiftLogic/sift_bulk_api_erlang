@@ -103,10 +103,10 @@ test_make_command_filled_in() ->
 %% calculate_port
 
 test_calculate_port_zeroes() ->
-    ?assertEqual(0, siftbulk_ftp:calculate_port(<<"0">>, <<"0">>)).
+    ?assertEqual(0, siftbulk_ftp:calculate_port("0", "0")).
 
 test_calculate_port_normal() ->
-    ?assertEqual(25601, siftbulk_ftp:calculate_port(<<"100">>, <<"1">>)).
+    ?assertEqual(25601, siftbulk_ftp:calculate_port("100", "1")).
 
 %% read_reply
 

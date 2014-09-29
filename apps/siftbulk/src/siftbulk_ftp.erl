@@ -13,30 +13,8 @@
 -define(DEBUG_PRINT(Format, Values), ok).
 -endif.
 
-%% Need to use siftbulk_ftp for external calls for proper mocking with meck.
 -ifdef(TEST).
 -compile(export_all).
--define(DO_CONNECT(Host, Port, IsLoggedIn), (siftbulk_ftp:do_connect(Host, Port, IsLoggedIn))).
--define(DO_LOGIN_STEP1(Socket, Username, Password),
-        (siftbulk_ftp:do_login_step1(Socket, Username, Password))).
--define(DO_LOGIN_STEP2, fun siftbulk_ftp:do_login_step2/2).
--define(DO_GET_PASSIVE(Socket), (siftbulk_ftp:do_get_passive(Socket))).
--define(READ_REPLY(Socket, Timeout), 
-        (siftbulk_ftp:read_reply(Socket, Timeout))).
--define(READ_REPLY(Socket, Timeout, Code, Acc), 
-        (siftbulk_ftp:read_reply(Socket, Timeout, Code, Acc))).
--define(READ_REPLY_CALL, fun siftbulk_ftp:read_reply_call/4).
--else.
--define(DO_CONNECT(Host, Port, IsLoggedIn), (do_connect(Host, Port, IsLoggedIn))).
--define(DO_LOGIN_STEP1(Socket, Username, Password),
-        (do_login_step1(Socket, Username, Password))).
--define(DO_LOGIN_STEP2,fun do_login_step2/2).
--define(DO_GET_PASSIVE(Socket), (do_get_passive(Socket))).
--define(READ_REPLY(Socket, Timeout), 
-        (read_reply(Socket, Timeout))).
--define(READ_REPLY(Socket, Timeout, Code, Acc), 
-        (siftbulk_ftp:read_reply(Socket, Timeout, Code, Acc))).
--define(READ_REPLY_CALL, fun read_reply_call/4).
 -endif.
 
 %% Takes the local file and uploads it to the remote file location.
@@ -144,18 +122,15 @@ do_get_passive(Socket) ->
     ok = gen_tcp:send(Socket, make_command("PASV", "")),
     case read_reply(Socket, ?TIMEOUT) of
         {ok, <<"227">>, MessageInner} ->
-            Parts = binary:split(MessageInner, [<<"(">>, <<")">>], [global]),
-            IPAndPort = binary:split(lists:nth(2, Parts), <<",">>, [global]),
+            [_, PortMap, _] = binary:split(MessageInner, [<<"(">>, <<")">>], [global]),
+            [S1, S2, S3, S4, P1, P2] =
+                [binary_to_list(P) || P <- binary:split(
+                                             PortMap,
+                                             <<",">>,
+                                             [global])],
+            Host = string:join([S1, S2, S3, S4], "."),
 
-            %% Gen_tcp accepts deep lists (WTF erlang?:( )
-            String1 = binary_to_list(lists:nth(1, IPAndPort)),
-            String2 = binary_to_list(lists:nth(2, IPAndPort)),
-            String3 = binary_to_list(lists:nth(3, IPAndPort)),
-            String4 = binary_to_list(lists:nth(4, IPAndPort)),
-            Host = string:join([String1, String2, String3, String4], "."),
-
-            {Port1, Port2} = {lists:nth(5, IPAndPort), lists:nth(6, IPAndPort)},
-            Port = calculate_port(Port1, Port2),
+            Port = calculate_port(P1, P2),
 
             case do_connect(Host, Port, true) of
                 {ok, PassiveSocket} ->
@@ -169,10 +144,10 @@ do_get_passive(Socket) ->
 
 %% Takes 2 binary parts and returns the port number as an integer.
 
--spec calculate_port(binary(), binary()) -> integer().
+-spec calculate_port(list(), list()) -> integer().
 calculate_port(Port1, Port2) ->
-    X = list_to_integer(binary_to_list(Port1)),
-    Y = list_to_integer(binary_to_list(Port2)),
+    X = list_to_integer(Port1),
+    Y = list_to_integer(Port2),
     (X * 256) + Y.
 
 %% Transforms the command into a format that will be accepted by the ftp server.
