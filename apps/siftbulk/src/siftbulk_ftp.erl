@@ -72,18 +72,18 @@
 -spec connect(string(), non_neg_integer(), string(), string()) -> 
     {ok, port(), port()} | {error, any()}.
 connect(Host, Port, User, Password) when is_integer(Port) ->
-    case ?DO_CONNECT(Host, Port, false) of
+    case do_connect(Host, Port, false) of
         {ok, Socket, Message} ->
             ?DEBUG_PRINT("Connected to server ~p~n", [Message]),
 
-            case ?DO_LOGIN_STEP1(Socket, User, Password) of
+            case do_login_step1(Socket, User, Password) of
                 {ok, _Socket} ->
-                    ?DO_GET_PASSIVE(Socket);
+                    do_get_passive(Socket);
                 {error, Reason} ->
                     {error, Reason}
             end;
         {error, Reason} ->
-            ?DEBUG_PRINT("Connected to server error ~p~n", [Reason]),
+            ?DEBUG_PRINT("Connecting to server error ~p~n", [Reason]),
             {error, Reason}
     end.
 
@@ -115,10 +115,10 @@ do_connect(Host, Port, IsLoggedIn) ->
 -spec do_login_step1(port(), string(), string()) -> {ok, port()} | {error, any()}.
 do_login_step1(Socket, Username, Password) ->
     ok = gen_tcp:send(Socket, make_command("USER", Username)),
-    case ?READ_REPLY(Socket, ?TIMEOUT) of
+    case read_reply(Socket, ?TIMEOUT) of
         {ok, <<"331">>, MessageOuter} ->
             ?DEBUG_PRINT("user ~p~n", [MessageOuter]),
-            ?DO_LOGIN_STEP2(Socket, Password);
+            do_login_step2(Socket, Password);
         _Other ->
             {error, _Other}
     end.
@@ -129,7 +129,7 @@ do_login_step1(Socket, Username, Password) ->
 -spec do_login_step2(port(), string()) -> {ok, port()} | {error, any()}.
 do_login_step2(Socket, Password) ->
     ok = gen_tcp:send(Socket, make_command("PASS", Password)),
-    case ?READ_REPLY(Socket, ?TIMEOUT) of
+    case read_reply(Socket, ?TIMEOUT) of
         {ok, <<"230">>, MessageInner} ->
             ?DEBUG_PRINT("pass ~p~n", [MessageInner]),
             {ok, Socket};
@@ -142,7 +142,7 @@ do_login_step2(Socket, Password) ->
 -spec do_get_passive(port()) -> {ok, port(), port()} | {error, any()}.
 do_get_passive(Socket) ->
     ok = gen_tcp:send(Socket, make_command("PASV", "")),
-    case ?READ_REPLY(Socket, ?TIMEOUT) of
+    case read_reply(Socket, ?TIMEOUT) of
         {ok, <<"227">>, MessageInner} ->
             Parts = binary:split(MessageInner, [<<"(">>, <<")">>], [global]),
             IPAndPort = binary:split(lists:nth(2, Parts), <<",">>, [global]),
@@ -157,7 +157,7 @@ do_get_passive(Socket) ->
             {Port1, Port2} = {lists:nth(5, IPAndPort), lists:nth(6, IPAndPort)},
             Port = calculate_port(Port1, Port2),
 
-            case ?DO_CONNECT(Host, Port, true) of
+            case do_connect(Host, Port, true) of
                 {ok, PassiveSocket} ->
                     {ok, Socket, PassiveSocket};
                 {error, Reason} ->
