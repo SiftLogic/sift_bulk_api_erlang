@@ -1,20 +1,30 @@
--module(siftbulk_tests).
-% -include_lib("eunit/include/eunit.hrl").
-% -include("../include/siftbulk.hrl").
-% -include("tests.hrl").
+-module(siftbulk_client_tests).
+-include_lib("eunit/include/eunit.hrl").
+-include_lib("tests.hrl").
+
+% Stores connection information visible to users of the ftp server.
+-record(state, {opts = [{username, undefined},
+                        {password, undefined},
+                        {host, "localhost"},
+                        {port, 21},
+                        {poll_every, 300}],
+                connection = undefined,
+                data = undefined}).
+
+% -record(test, {pid = undefined}).
 
 -define(DEFAULT_OPTS_INFO, #state{}#state.opts).
 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%
-% %%% TESTS DESCRIPTIONS %%%
-% %%%%%%%%%%%%%%%%%%%%%%%%%%
-% %% These need to be tested together because they are the main getter/setter
-% set_opts_and_get_opts_test_() ->
-%     {"Verifies that set opts actually sets values and the can be retrieved",
-%      ?setup([fun test_get_opts_empty/0,
-%              fun test_get_opts_set_one/0,
-%              fun test_get_opts_set_one_list/0,
-%              fun test_get_opts_set_multiple/0])}.
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% TESTS DESCRIPTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% These need to be tested together because they are the main getter/setter
+set_opts_and_get_opts_test_() ->
+    {"Verifies that set opts actually sets values and the can be retrieved",
+     ?setup_mock([fun test_get_opts_empty/0,
+                  fun test_get_opts_set_one/0,
+                  fun test_get_opts_set_one_list/0,
+                  fun test_get_opts_set_multiple/0])}.
 
 % init_test_() ->
 %     {"Verifies that init sets default and values when appropriate",
@@ -53,55 +63,70 @@
 %     {"Verifies that it stops correctly",
 %      ?setup([fun test_stop_default/0])}.
 
-% %%%%%%%%%%%%%%%%%%%%%%%
-% %%% SETUP FUNCTIONS %%%
-% %%%%%%%%%%%%%%%%%%%%%%%
-% start() ->
-%     ok = application:start(siftbulk).
+%%%%%%%%%%%%%%%%%%%%%%%
+%%% SETUP FUNCTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%
+start() ->
+    ok = application:start(siftbulk),
+    ets:new(test, [public, named_table]).
  
-% stop(_) ->
-%     ok = quiet_stop(siftbulk).
+stop(_) ->
+    ok = quiet_stop(siftbulk).
 
-% start_mock() ->
-%     start(),
-%     meck:new(siftbulk_ftp, [unstick]).
- 
-% stop_mock(_Arg) ->
-%     meck:validate(siftbulk_ftp),
-%     meck:unload(siftbulk_ftp),
-%     ok = stop(_Arg).
+start_mock() ->
+    start(),
+    meck:new(siftbulk_ftp, [unstick]),
+
+    meck:expect(siftbulk_ftp, connect,
+        fun(_, _, _ , _) -> {ok, <<"Socket">>, <<"PassiveSocket">>} end),
+
+    {ok, Pid} = siftbulk:connect(),
+    ets:insert(test, {pid, Pid}).
+
+stop_mock(_Arg) ->
+    meck:validate(siftbulk_ftp),
+    meck:unload(siftbulk_ftp),
+    ets:delete(test),
+
+    ok = stop(_Arg).
 
 % %%%%%%%%%%%%%%%%%%%%
 % %%% ACTUAL TESTS %%%
 % %%%%%%%%%%%%%%%%%%%%
 
-% %% get_opts
+%% A running instance will need to be tested. It is generated in the functions above and then used
+%% here by retrieving its stored process id.
+getPid() ->
+  [{pid, Pid}] = ets:lookup(test, pid),
+  Pid.
 
-% test_get_opts_empty() ->
-%     ?assertEqual(?DEFAULT_OPTS_INFO, siftbulk:get_opts()).
+%% get_opts (and set opts)
 
-% test_get_opts_set_one() ->
-%     ShouldBe = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
-%                                 {username, "TestUser"}),
-%     siftbulk:set_opts({username, "TestUser"}),
-%     ?assertEqual(ShouldBe, siftbulk:get_opts()).
+test_get_opts_empty() ->
+    ?assertEqual(?DEFAULT_OPTS_INFO, siftbulk_client:get_opts(getPid())).
 
-% test_get_opts_set_one_list() ->
-%     ShouldBe = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
-%                                 {username, "TestUser"}),
-%     siftbulk:set_opts([{username, "TestUser"}]),
-%     ?assertEqual(ShouldBe, siftbulk:get_opts()).
+test_get_opts_set_one() ->
+    ShouldBe = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
+                                {username, "TestUser"}),
+    siftbulk_client:set_opts(getPid(), {username, "TestUser"}),
+    ?assertEqual(ShouldBe, siftbulk_client:get_opts(getPid())).
 
-% test_get_opts_set_multiple() ->
-%     Temp = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
-%                             {username, "TestUser"}),
-%     Temp1 = lists:keyreplace(password, 1, Temp, {password, "test"}),
-%     ShouldBe = lists:keyreplace(host, 1, Temp1, {host, "bacon"}),
+test_get_opts_set_one_list() ->
+    ShouldBe = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
+                                {username, "TestUser"}),
+    siftbulk_client:set_opts(getPid(), [{username, "TestUser"}]),
+    ?assertEqual(ShouldBe, siftbulk_client:get_opts(getPid())).
 
-%     siftbulk:set_opts([{username, "TestUser"},
-%                        {password, "test"},
-%                        {host, "bacon"}]),
-%     ?assertEqual(ShouldBe, siftbulk:get_opts()).
+test_get_opts_set_multiple() ->
+    Temp = lists:keyreplace(username, 1, ?DEFAULT_OPTS_INFO,
+                            {username, "TestUser"}),
+    Temp1 = lists:keyreplace(password, 1, Temp, {password, "test"}),
+    ShouldBe = lists:keyreplace(host, 1, Temp1, {host, "bacon"}),
+
+    siftbulk_client:set_opts(getPid(), [{username, "TestUser"},
+                                        {password, "test"},
+                                        {host, "bacon"}]),
+    ?assertEqual(ShouldBe, siftbulk_client:get_opts(getPid())).
 
 % %% init
 

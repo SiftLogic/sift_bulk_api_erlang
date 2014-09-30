@@ -4,7 +4,9 @@
 -behaviour(gen_server).
 
 -record(state, {parent_pid = undefined,
-                 worker_sup = undefined}).
+                worker_sup = undefined,
+
+                process_map = []}).
 
 -export([start_link/0, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 -export([init/1, connect/0, stop/0]).
@@ -45,7 +47,7 @@ handle_call(connect, _From, #state{parent_pid = ParentPid} = State) ->
     {ok, ClientPid} = supervisor:start_child(siftbulk_client_sup, NewChild),
     Response = case gen_server:call(ClientPid, connect) of
                    ok ->
-                       {ok, ClientPid};
+                      {ok, ClientPid};
                    {error, Error} ->
                        supervisor:terminate_child(siftbulk_client_sup, ClientPid),
                       {error, Error}

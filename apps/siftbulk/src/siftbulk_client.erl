@@ -2,41 +2,49 @@
 
 -module(siftbulk_client).
 -behaviour(gen_server).
--include("../include/siftbulk.hrl").
+
+% Stores connection information visible to users of the ftp server.
+-record(state, {opts = [{username, undefined},
+                        {password, undefined},
+                        {host, "localhost"},
+                        {port, 21},
+                        {poll_every, 300}],
+                connection = undefined,
+                data = undefined}).
 
 -export([start_link/0, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
--export([set_opts/1, get_opts/0, init/1, connect/0, stop/0]).
+-export([set_opts/2, get_opts/1, init/1, connect/0, stop/0]).
 
 -type connection_part() :: {atom(), any()}.
 -type connection_list() :: list(connection_part()).
 
 %% Private
 
--spec set_opts(#state{}, connection_list()) -> #state{}.
-set_opts(#state{} = State, []) ->
+-spec set_opts_(#state{}, connection_list()) -> #state{}.
+set_opts_(#state{} = State, []) ->
     State;
-set_opts(#state{} = State, Opts) ->
+set_opts_(#state{} = State, Opts) ->
     Fields = [host, password, poll_every, port, username],
-    set_opts(State, Fields, Opts).
+    set_opts_(State, Fields, Opts).
 
--spec set_opts(#state{}, list(), connection_list()) -> #state{}.
-set_opts(#state{} = State, [], _Opts) ->
+-spec set_opts_(#state{}, list(), connection_list()) -> #state{}.
+set_opts_(#state{} = State, [], _Opts) ->
     State;
-set_opts(#state{opts = OldOpts} = State, [Field | Tail], Opts) ->
+set_opts_(#state{opts = OldOpts} = State, [Field | Tail], Opts) ->
     case lists:keyfind(Field, 1, Opts) of
         {Field, _} = NewValue ->
             case lists:keyfind(Field, 1, OldOpts) of
                 false -> 
-                    set_opts(
+                    set_opts_(
                         State#state{opts = [NewValue | OldOpts]},
                         Tail, Opts);
                 _ ->
-                    set_opts(
+                    set_opts_(
                         State#state{opts = lists:keyreplace(Field, 1, OldOpts, NewValue)},
                         Tail, Opts)
             end;
         false ->
-            set_opts(State, Tail, Opts)
+            set_opts_(State, Tail, Opts)
     end.
 
 -spec connect(connection_list()) -> 
@@ -73,7 +81,7 @@ init(_) ->
                  []
            end,
 
-    State = set_opts(#state{}, Opts),
+    State = set_opts_(#state{}, Opts),
 
     {ok, State}.
 
@@ -91,7 +99,7 @@ connect() ->
 %% Handles all synchronous calls to the server. See specific functions for more
 %% detailed information.
 
--spec handle_call({set_opts, connection_list()}, any(), any()) ->
+-spec handle_call({set_opts_, connection_list()}, any(), any()) ->
                      {reply, ok, #state{}};
                  (get_opts, any(), #state{}) -> 
                      {reply, connection_list(), #state{}};
@@ -99,10 +107,11 @@ connect() ->
                      {reply, {ok, port()} | {error, any()}, #state{}};
                  (stop, any(), any()) -> 
                      {stop, normal, ok, any()}.
-handle_call({set_opts, Opts}, _From, State) ->
-    NewState = set_opts(State, Opts),
+handle_call({set_opts_, Opts}, _From, State) ->
+    NewState = set_opts_(State, Opts),
     {reply, ok, NewState};
 handle_call(get_opts, _From, #state{opts = Opts} = State) ->
+    % io:format("In handle call~n"),
     {reply, Opts, State};
 handle_call(connect, _From, #state{opts = Opts} = State) ->
     case connect(Opts) of
@@ -153,16 +162,16 @@ stop() ->
 %% Allows updating of the state by specifying a list of tuples or a single tuple
 %% e.g. set_opts([username, <<"TestUser">>]).
 
--spec set_opts(connection_list()) -> ok | {error, badarg, binary()};
-              (connection_part()) -> ok | {error, badarg, binary()}.
-set_opts(Opts) when is_list(Opts) ->
-    gen_server:call(?MODULE, {set_opts, Opts});
-set_opts(OptTuple) when is_tuple(OptTuple) ->
-    gen_server:call(?MODULE, {set_opts, [OptTuple]}).
+-spec set_opts(pid(), connection_list()) -> ok | {error, badarg, binary()};
+              (pid(), connection_part()) -> ok | {error, badarg, binary()}.
+set_opts(Pid, Opts) when is_list(Opts) ->
+    gen_server:call(Pid, {set_opts_, Opts});
+set_opts(Pid, OptTuple) when is_tuple(OptTuple) ->
+    gen_server:call(Pid, {set_opts_, [OptTuple]}).
 
 %% Returns the connections details. Namely, username, password, host, port and
 %% poll_every.
 
--spec get_opts() -> connection_list().
-get_opts() ->
-    gen_server:call(?MODULE, get_opts).
+-spec get_opts(pid()) -> connection_list().
+get_opts(Pid) ->
+    gen_server:call(Pid, get_opts).
